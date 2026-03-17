@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Entregas Móvil</title>
+    <!-- Incluyendo Bootstrap para un diseño Mobile-First rápido y estilizado -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-bottom: 70px;
+            /* Espacio para barra inferior en móviles si la hubiera */
+        }
+
+        .header {
+            background-color: #0d6efd;
+            color: white;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-custom {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .table-responsive {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table th {
+            background-color: #f1f3f5;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .btn-action {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 12px;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+
+        .format-money {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .number-cell {
+            text-align: right;
+        }
+
+        #loading {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header d-flex justify-content-between align-items-center">
+        <h5 class="m-0"><i class="bi bi-box-seam me-2"></i>Consulta Entregas</h5>
+    </div>
+
+    <div class="container mt-3">
+
+        <!-- Panel de Filtros -->
+        <div class="card card-custom">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-muted"><i class="bi bi-funnel"></i> Filtros de búsqueda</h6>
+
+                <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small text-muted mb-1">Cliente (Cód o Ref)</label>
+                        <input type="text" class="form-control" id="txtCliente" placeholder="Ej: 150 o 634">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-muted mb-1">Perno</label>
+                        <input type="number" class="form-control" id="txtPerno" placeholder="Ej: 5404">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-muted mb-1">Lista</label>
+                        <input type="text" class="form-control" id="txtLista" placeholder="Ej: 6">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-1">Desde</label>
+                        <input type="date" class="form-control" id="txtFechaDesde">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-muted mb-1">Hasta</label>
+                        <input type="date" class="form-control" id="txtFechaHasta">
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <button class="btn btn-primary btn-action" onclick="ejecutarConsulta('detalle')">
+                            <i class="bi bi-list-ul"></i> Ver Detalle
+                        </button>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <button class="btn btn-success btn-action" onclick="ejecutarConsulta('resumen_perno')">
+                            <i class="bi bi-pie-chart"></i> Resumir por Perno
+                        </button>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <button class="btn btn-info text-white btn-action"
+                            onclick="ejecutarConsulta('resumen_cliente_perno')">
+                            <i class="bi bi-people"></i> Resumir Cli+Perno
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="loading" class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="text-muted mt-2 small">Consultando base de datos...</p>
+        </div>
+
+        <div id="error-container" class="alert alert-danger d-none" role="alert"></div>
+
+        <div id="results-card" class="card card-custom d-none">
+            <div class="card-body p-0">
+                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="m-0" id="results-title">Resultados</h6>
+                    <span class="badge bg-secondary" id="results-count">0</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0 align-middle small" id="results-table">
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Formateador de moneda
+        const formatter = new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+        });
+
+        // Formateador de fecha
+        function formatDate(dateString) {
+            if (!dateString) return "";
+            try {
+                const d = new Date(dateString);
+                if (isNaN(d.getTime())) return dateString;
+                return d.toLocaleDateString();
+            } catch (e) { return dateString; }
+        }
+
+        async function ejecutarConsulta(action) {
+            // UI setup
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-card').classList.add('d-none');
+            document.getElementById('error-container').classList.add('d-none');
+
+            const payload = {
+                action: action,
+                cliente: document.getElementById('txtCliente').value,
+                perno: document.getElementById('txtPerno').value,
+                lista: document.getElementById('txtLista').value,
+                fechaDesde: document.getElementById('txtFechaDesde').value,
+                fechaHasta: document.getElementById('txtFechaHasta').value
+            };
+
+            let title = "Resultados";
+            if (action === 'detalle') title = "Detalle de Entregas (Top 300)";
+            if (action === 'resumen_perno') title = "Resumen Global por Perno";
+            if (action === 'resumen_cliente_perno') title = "Resumen por Cliente y Perno";
+
+            document.getElementById('results-title').textContent = title;
+
+            try {
+                const response = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+
+                if (result.error) {
+                    showError("Error en servidor: " + result.error);
+                    return;
+                }
+
+                renderTable(result.columns, result.data);
+
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showError("Fallo de conexión o error procesando: " + error.message);
+            }
+        }
+
+        function renderTable(columns, data) {
+            const thead = document.getElementById('table-head');
+            const tbody = document.getElementById('table-body');
+
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            document.getElementById('results-count').textContent = data.length + " filas";
+
+            if (data.length === 0) {
+                document.getElementById('error-container').textContent = "No se encontraron resultados para estos filtros.";
+                document.getElementById('error-container').classList.remove('d-none');
+                document.getElementById('error-container').classList.replace('alert-danger', 'alert-info');
+                return;
+            }
+            document.getElementById('error-container').classList.replace('alert-info', 'alert-danger');
+
+            // Header
+            let trHead = document.createElement('tr');
+            columns.forEach(col => {
+                let th = document.createElement('th');
+                th.textContent = col;
+                // Alinear precios a la derecha
+                if (col.toLowerCase().includes('precio') || col.toLowerCase().includes('monto') || col.includes('Total')) {
+                    th.classList.add('text-end');
+                } else if (col.toLowerCase().includes('cantidad')) {
+                    th.classList.add('text-end');
+                }
+                trHead.appendChild(th);
+            });
+            thead.appendChild(trHead);
+
+            // Body
+            data.forEach(row => {
+                let tr = document.createElement('tr');
+                columns.forEach(col => {
+                    let td = document.createElement('td');
+                    let val = row[col];
+
+                    if (val === null || val === undefined) val = "";
+
+                    // Lógica de formateo según columna
+                    let colLower = col.toLowerCase();
+                    if (colLower.includes('fecha')) {
+                        td.textContent = formatDate(val);
+                    }
+                    else if (colLower.includes('precio') || colLower.includes('monto') || col.includes('TotalMonto')) {
+                        td.textContent = (val !== "" && !isNaN(val)) ? formatter.format(val) : val;
+                        td.classList.add('format-money');
+                    }
+                    else if (colLower.includes('cantidad')) {
+                        td.textContent = val;
+                        td.classList.add('number-cell', 'fw-bold');
+                    }
+                    else {
+                        td.textContent = val;
+                    }
+
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('results-card').classList.remove('d-none');
+        }
+
+        function showError(msg) {
+            const err = document.getElementById('error-container');
+            err.textContent = msg;
+            err.classList.remove('d-none');
+        }
+    </script>
+</body>
+
+</html>

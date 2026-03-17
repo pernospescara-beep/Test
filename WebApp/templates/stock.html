@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Consulta de Stock</title>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACAgAAABACAAqAgAAE4FAAAoAAAAEAAAACAAAAABACAA AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAA">
+    <!-- Incluyendo Bootstrap para un diseño Mobile-First rápido y estilizado -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-bottom: 70px;
+            /* Espacio para barra inferior en móviles si la hubiera */
+        }
+
+        .header {
+            background-color: #198754;
+            color: white;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-custom {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .table-responsive {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table th {
+            background-color: #f1f3f5;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .btn-action {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 12px;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+
+        .number-cell {
+            text-align: right;
+        }
+
+        .stock-low {
+            background-color: #fff3cd;
+        }
+
+        .stock-out {
+            background-color: #f8d7da;
+        }
+
+        #loading {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header d-flex justify-content-between align-items-center">
+        <h5 class="m-0"><i class="bi bi-boxes me-2"></i>Consulta de Stock</h5>
+    </div>
+
+    <div class="container mt-3">
+
+        <!-- Panel de Filtros -->
+        <div class="card card-custom">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-muted"><i class="bi bi-funnel"></i> Filtros de búsqueda</h6>
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-8">
+                        <label class="form-label small text-muted mb-1">Código de producto</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="txtPerno" placeholder="Ej: 5404">
+                            <button class="btn btn-outline-secondary" type="button" onclick="buscarYMostrarPerno()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        <div id="filter-message" class="form-text text-danger mt-1" style="display:none;"></div>
+                    </div>
+                    <div class="col-12 col-md-8">
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-secondary btn-sm" id="btnAnterior" onclick="productoAnterior()" disabled>
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <span class="small text-muted" id="contadorProductos">0/0</span>
+                            <button class="btn btn-secondary btn-sm" id="btnSiguiente" onclick="productoSiguiente()" disabled>
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4 text-end">
+                        <button class="btn btn-outline-primary btn-sm" type="button" onclick="cargarProductosVigentes()">
+                            <i class="bi bi-arrow-clockwise"></i> Recargar lista
+                        </button>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <div id="status-message" class="small text-muted"></div>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                        <button class="btn btn-success btn-action" style="display:none;" onclick="ejecutarConsulta('listar')">
+                            <i class="bi bi-list-ul"></i> Ver Detalle
+                        </button>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <button class="btn btn-info text-white btn-action" style="display:none;" onclick="ejecutarConsulta('resumen_stock')">
+                            <i class="bi bi-pie-chart"></i> Resumen por Tipo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="loading" class="text-center py-4">
+            <div class="spinner-border text-success" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="text-muted mt-2 small">Consultando base de datos...</p>
+        </div>
+
+        <div id="error-container" class="alert alert-danger d-none" role="alert"></div>
+
+        <div id="results-card" class="card card-custom d-none">
+            <div class="card-body p-0">
+                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="m-0" id="results-title">Resultados</h6>
+                    <span class="badge bg-secondary" id="results-count">0</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0 align-middle small" id="results-table">
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Actualización de Stock -->
+        <div class="card card-custom border-warning">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-muted"><i class="bi bi-pencil-square"></i> Actualizar Stock</h6>
+
+                <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small text-muted mb-1">Número de Perno *</label>
+                        <input type="text" class="form-control" id="txtPernoUpdate" placeholder="Ej: 5404" readonly style="background-color: #e9ecef;">
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small text-muted mb-1">Clase/Tipo *</label>
+                        <select class="form-control" id="selectClaseUpdate">
+                            <option value="">-- Seleccionar Clase --</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small text-muted mb-1">Nueva Cantidad de Stock *</label>
+                        <input type="number" class="form-control" id="txtStockUpdate" placeholder="Ej: 50" min="0">
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <button class="btn btn-warning text-dark btn-action" onclick="actualizarStock()">
+                    <i class="bi bi-check-circle"></i> Actualizar Stock
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Variables globales para navegación y mapeo de stock
+        let productosVigentes = [];
+        let indiceProductoActual = -1;
+        let ultimoStockData = [];
+        let claseDescripcionByCodigo = {};
+
+        // Cargar clases de producto y lista de productos al iniciar la página
+        document.addEventListener('DOMContentLoaded', async () => {
+            await cargarClases();
+
+            // Cargar lista de productos vigentes, pero NO mostrar ningún stock hasta que el usuario
+            // seleccione un producto (filtro) o navegue con los botones.
+            await cargarProductosVigentes(true, false);
+
+            document.getElementById('txtPerno').focus();
+        });
+
+        // Cargar todas las clases en el dropdown
+        async function cargarClases() {
+            try {
+                const response = await fetch('/api/get-clases');
+                const result = await response.json();
+                
+                if (result.data) {
+                    const select = document.getElementById('selectClaseUpdate');
+                    result.data.forEach(clase => {
+                        const option = document.createElement('option');
+                        option.value = clase.Codigo;  // Valores con el código
+                        option.textContent = clase.Descripcion;  // Mostrar la descripción
+                        select.appendChild(option);
+                        claseDescripcionByCodigo[clase.Codigo] = clase.Descripcion;
+                    });
+                }
+            } catch (err) {
+                console.error('Error cargando clases:', err);
+            }
+        }
+
+        // Formateador de fecha
+        function formatDate(dateString) {
+            if (!dateString) return "";
+            try {
+                const d = new Date(dateString);
+                if (isNaN(d.getTime())) return dateString;
+                return d.toLocaleDateString();
+            } catch (e) { return dateString; }
+        }
+
+        // Determinar si una celda debe resaltarse por bajo stock
+        function getStockClass(columnName, value) {
+            if (columnName && columnName.toLowerCase().includes('stock')) {
+                if (parseInt(value) === 0) {
+                    return 'stock-out';
+                } else if (parseInt(value) < 10) {
+                    return 'stock-low';
+                }
+            }
+            return '';
+        }
+
+        async function ejecutarConsulta(action) {
+            // UI setup
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-card').classList.add('d-none');
+            document.getElementById('error-container').classList.add('d-none');
+
+            const payload = {
+                action: action,
+                perno: document.getElementById('txtPerno').value
+            };
+
+            let title = "Resultados";
+            if (action === 'listar') title = "Detalle de Stock";
+            if (action === 'resumen_stock') title = "Resumen de Stock por Tipo de Producto";
+
+            document.getElementById('results-title').textContent = title;
+
+            try {
+                const response = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const result = await response.json();
+
+                if (result.error) {
+                    document.getElementById('error-container').textContent = "Error: " + result.error;
+                    document.getElementById('error-container').classList.remove('d-none');
+                } else {
+                    mostrarResultados(result.columns, result.data);
+                }
+            } catch (err) {
+                document.getElementById('error-container').textContent = "Error en la solicitud: " + err.message;
+                document.getElementById('error-container').classList.remove('d-none');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function mostrarResultados(columns, data) {
+            // Guardar el último resultado para poder completar stock según clase seleccionada
+            ultimoStockData = data || [];
+
+            // ✅ Define aquí el orden deseado de columnas
+            const ordenDeseado = ['Perno', 'Clase', 'Stock', 'Ext Min', 'Ext Max', 'fechaStockInicial'];
+            
+            // Filtrar columnas que no queremos mostrar (ocultar fechaStockInicial)
+            columns = columns.filter(c => c !== 'fechaStockInicial');
+
+            // Reordena: primero las que están en tu lista, luego las restantes
+            const columnsOrdenadas = [
+                ...ordenDeseado.filter(c => columns.includes(c)),
+                ...columns.filter(c => !ordenDeseado.includes(c))
+            ];
+            
+            // Reemplaza 'columns' por 'columnsOrdenadas' en el resto de la función
+            columns = columnsOrdenadas;
+    
+              
+            
+            
+            const thead = document.getElementById('table-head');
+            const tbody = document.getElementById('table-body');
+
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            // Crear headers
+            const headerRow = document.createElement('tr');
+            columns.forEach(col => {
+                const th = document.createElement('th');
+                th.textContent = col;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            // Crear filas y hacerlas clickeables
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.style.transition = 'background-color 0.2s';
+                
+                // Al hacer clic en una fila, llenar el formulario de actualización
+                tr.addEventListener('click', async () => {
+                    const perno = row[columns[0]];  // Perno
+                    const claseDescripcion = row[columns[1]];  // Clase (Descripción)
+                    const stockValue = row['Stock'] ?? row['stock'] ?? '';
+                    
+                    document.getElementById('txtPernoUpdate').value = perno;
+                    
+                    // Obtener el código correspondiente a esta descripción
+                    try {
+                        const response = await fetch('/api/get-tipo-codigo', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ descripcion: claseDescripcion })
+                        });
+                        const result = await response.json();
+                        
+                        if (result.codigo) {
+                            document.getElementById('selectClaseUpdate').value = result.codigo;
+                        } else {
+                            alert('Error: No se pudo obtener el código de la clase');
+                        }
+                    } catch (err) {
+                        console.error('Error obteniendo código de clase:', err);
+                    }
+                    
+                    // Autocompletar la cantidad de stock vigente para esta clase seleccionada
+                    document.getElementById('txtStockUpdate').value = stockValue;
+                    document.getElementById('txtStockUpdate').focus();
+                    
+                    // Scroll al formulario de actualización
+                    document.querySelector('.card.card-custom.border-warning').scrollIntoView({ behavior: 'smooth' });
+                });
+                
+                // Hover effect
+                tr.addEventListener('mouseenter', () => {
+                    tr.style.backgroundColor = '#f0f0f0';
+                });
+                tr.addEventListener('mouseleave', () => {
+                    tr.style.backgroundColor = '';
+                });
+                
+                columns.forEach(col => {
+                    const td = document.createElement('td');
+                    let value = row[col];
+                    
+                    // Aplicar formateo según tipo de dato
+                    if (col.toLowerCase().includes('fecha')) {
+                        value = formatDate(value);
+                        td.textContent = value;
+                    } else if (col.toLowerCase().includes('stock') || 
+                               col.toLowerCase().includes('min') || 
+                               col.toLowerCase().includes('max')) {
+                        if (col.toLowerCase().includes('min') || col.toLowerCase().includes('max')) {
+                            td.textContent = parseFloat(value).toFixed(3);
+                        } else {
+                            td.textContent = value;
+                        }
+                        td.classList.add('number-cell');
+                        const stockClass = getStockClass(col, value);
+                        if (stockClass) {
+                            td.classList.add(stockClass);
+                        }
+                    } else {
+                        td.textContent = value !== null ? value : '-';
+                    }
+                    
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('results-count').textContent = data.length;
+            document.getElementById('results-card').classList.remove('d-none');
+        }
+
+        async function actualizarStock() {
+            const perno = document.getElementById('txtPernoUpdate').value.trim();
+            const tipoCodel = document.getElementById('selectClaseUpdate').value.trim();
+            const stock = document.getElementById('txtStockUpdate').value.trim();
+
+            if (!perno) {
+                alert('Por favor selecciona un perno desde la tabla');
+                return;
+            }
+            if (!tipoCodel) {
+                alert('Por favor selecciona una clase/tipo');
+                return;
+            }
+
+            if (!stock || isNaN(stock) || parseInt(stock) < 0) {
+                alert('Por favor ingresa una cantidad válida (número no negativo)');
+                return;
+            }
+
+            // Confirmación
+            if (!confirm(`¿Actualizar stock del perno ${perno} a ${stock} unidades?`)) {
+                return;
+            }
+
+            // UI setup
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error-container').classList.add('d-none');
+
+            try {
+                const response = await fetch('/api/update-stock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        perno: perno,
+                        tipo: tipoCodel,
+                        stock: parseInt(stock)
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const result = await response.json();
+
+                if (result.error) {
+                    document.getElementById('error-container').textContent = "Error: " + result.error;
+                    document.getElementById('error-container').classList.remove('d-none');
+                } else {
+                    alert('✓ Stock actualizado exitosamente');
+                    document.getElementById('txtPernoUpdate').value = '';
+                    document.getElementById('txtStockUpdate').value = '';
+                }
+            } catch (err) {
+                document.getElementById('error-container').textContent = "Error en la solicitud: " + err.message;
+                document.getElementById('error-container').classList.remove('d-none');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Funciones de navegación por productos
+        async function cargarProductosVigentes(suppressAlert = false, mostrarPrimerProducto = true) {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error-container').classList.add('d-none');
+
+                const response = await fetch('/api/get-productos-vigentes');
+                const result = await response.json();
+
+                if (result.productos) {
+                    productosVigentes = result.productos;
+
+                    // Inicializamos el índice de navegación.
+                    // Si estamos cargando la lista pero no mostrando stock aún, dejamos -1 para indicar "sin selección".
+                    const filtroPerno = document.getElementById('txtPerno').value.trim();
+                    if (mostrarPrimerProducto) {
+                        if (filtroPerno) {
+                            const encontrado = productosVigentes.findIndex(p => String(p) === filtroPerno);
+                            indiceProductoActual = encontrado >= 0 ? encontrado : 0;
+                        } else {
+                            indiceProductoActual = 0;
+                        }
+                    } else {
+                        indiceProductoActual = -1;
+                    }
+
+                    actualizarBotonesNavegacion();
+
+                    // Mostrar stock solo cuando el usuario haya elegido un producto (navegación / búsqueda)
+                    if (mostrarPrimerProducto) {
+                        await mostrarProductoActual();
+                    } else {
+                        // Limpiar pantalla para evitar confusiones al iniciar
+                        document.getElementById('results-card').classList.add('d-none');
+                        document.getElementById('table-head').innerHTML = '';
+                        document.getElementById('table-body').innerHTML = '';
+                        document.getElementById('results-count').textContent = '0';
+
+                        // Limpiar panel de actualización
+                        document.getElementById('txtPernoUpdate').value = '';
+                        document.getElementById('txtStockUpdate').value = '';
+                        document.getElementById('selectClaseUpdate').value = '';
+                    }
+
+                    if (!suppressAlert) {
+                        setStatusMessage(`Cargados ${productosVigentes.length} productos vigentes (inicio en índice ${indiceProductoActual + 1})`, 'success');
+                    }
+                } else {
+                    document.getElementById('error-container').textContent = "Error: " + (result.error || "No se pudieron cargar los productos");
+                    document.getElementById('error-container').classList.remove('d-none');
+                }
+            } catch (err) {
+                document.getElementById('error-container').textContent = "Error en la solicitud: " + err.message;
+                document.getElementById('error-container').classList.remove('d-none');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        async function mostrarProductoActual() {
+            if (productosVigentes.length === 0 || indiceProductoActual < 0 || indiceProductoActual >= productosVigentes.length) {
+                return;
+            }
+
+            // Actualizar contador incluso si no hay datos de stock
+            actualizarBotonesNavegacion();
+
+            const perno = productosVigentes[indiceProductoActual];
+
+            try {
+                const response = await fetch('/api/get-stock-producto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ perno: perno })
+                });
+
+                const result = await response.json();
+
+                if (result.data) {
+                    mostrarResultados(result.columns, result.data);
+                    document.getElementById('results-title').textContent = `Stock del Producto: ${perno}`;
+                } else {
+                    document.getElementById('error-container').textContent = "Error: " + (result.error || "No se pudo obtener el stock del producto");
+                    document.getElementById('error-container').classList.remove('d-none');
+                }
+            } catch (err) {
+                document.getElementById('error-container').textContent = "Error en la solicitud: " + err.message;
+                document.getElementById('error-container').classList.remove('d-none');
+            }
+        }
+
+        function productoAnterior() {
+            if (indiceProductoActual > 0) {
+                indiceProductoActual--;
+                actualizarBotonesNavegacion();
+                mostrarProductoActual();
+            }
+        }
+
+        function productoSiguiente() {
+            if (indiceProductoActual < productosVigentes.length - 1) {
+                indiceProductoActual++;
+                actualizarBotonesNavegacion();
+                mostrarProductoActual();
+            }
+        }
+
+        function actualizarBotonesNavegacion() {
+            const btnAnterior = document.getElementById('btnAnterior');
+            const btnSiguiente = document.getElementById('btnSiguiente');
+            const contador = document.getElementById('contadorProductos');
+
+            btnAnterior.disabled = indiceProductoActual <= 0;
+            btnSiguiente.disabled = indiceProductoActual >= productosVigentes.length - 1;
+
+            contador.textContent = productosVigentes.length > 0 
+                ? `${indiceProductoActual + 1}/${productosVigentes.length}` 
+                : '0/0';
+        }
+
+        // Buscar el perno ingresado en el filtro dentro de la lista cargada y mostrarlo
+        function showFilterMessage(message) {
+            const msg = document.getElementById('filter-message');
+            msg.textContent = message;
+            msg.style.display = message ? 'block' : 'none';
+        }
+
+        function setStatusMessage(message, type = 'info') {
+            const status = document.getElementById('status-message');
+            status.textContent = message;
+            status.className = 'small';
+            if (type === 'error') {
+                status.classList.add('text-danger');
+            } else if (type === 'success') {
+                status.classList.add('text-success');
+            } else {
+                status.classList.add('text-muted');
+            }
+        }
+
+        async function buscarYMostrarPerno() {
+            const filtroPerno = document.getElementById('txtPerno').value.trim();
+            if (!filtroPerno) {
+                showFilterMessage('');
+                setStatusMessage('');
+                return;
+            }
+
+            // Si la lista no está cargada, la cargamos en background
+            if (productosVigentes.length === 0) {
+                await cargarProductosVigentes(true);
+            }
+
+            const encontrado = productosVigentes.findIndex(p => String(p) === filtroPerno);
+            if (encontrado >= 0) {
+                showFilterMessage('');
+                setStatusMessage(`Producto ${filtroPerno} encontrado`, 'success');
+                indiceProductoActual = encontrado;
+                actualizarBotonesNavegacion();
+                await mostrarProductoActual();
+            } else {
+                showFilterMessage(`No se encontró un producto que coincida con '${filtroPerno}'`);
+                setStatusMessage(`No se encontró el producto ${filtroPerno}`, 'error');
+            }
+        }
+
+        // Permitir presionar Enter en el filtro para buscar el producto
+        document.getElementById('txtPerno').addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                await buscarYMostrarPerno();
+            }
+        });
+
+        // Limpiar mensaje cuando el usuario edita el filtro
+        document.getElementById('txtPerno').addEventListener('input', () => {
+            showFilterMessage('');
+        });
+
+        // Al seleccionar una clase en el panel de actualización, completar stock vigente si está disponible
+        document.getElementById('selectClaseUpdate').addEventListener('change', () => {
+            const perno = document.getElementById('txtPernoUpdate').value.trim();
+            const codigo = document.getElementById('selectClaseUpdate').value;
+            if (!perno || !codigo) return;
+
+            const descripcion = claseDescripcionByCodigo[codigo];
+            if (!descripcion) return;
+
+            const fila = ultimoStockData.find(r => String(r['Perno']) === String(perno) && r['Clase'] === descripcion);
+            if (fila && fila['Stock'] !== undefined) {
+                document.getElementById('txtStockUpdate').value = fila['Stock'];
+            }
+        });
+    </script>
+
+</body>
+
+</html>

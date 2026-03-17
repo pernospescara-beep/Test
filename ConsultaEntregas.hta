@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Consulta de Entregas al Cliente</title>
+    <HTA:APPLICATION 
+        ID="ConsultaEntregas" 
+        APPLICATIONNAME="Consulta Entregas Access" 
+        BORDER="dialog"
+        INNERBORDER="no"
+        CAPTION="yes"
+        ICON=""
+        SHOWINTASKBAR="yes"
+        SINGLEINSTANCE="yes"
+        SYSMENU="yes"
+        WINDOWSTATE="normal" />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .panel-filtros {
+            flex: 0 0 300px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        .panel-resultados {
+            flex: 1;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 500px;
+            overflow: auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #555;
+        }
+        input[type="text"], input[type="date"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        .btn-secondary {
+            background-color: #2ecc71;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #27ae60;
+        }
+        .btn-tertiary {
+            background-color: #9b59b6;
+            color: white;
+        }
+        .btn-tertiary:hover {
+            background-color: #8e44ad;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .error {
+            color: #e74c3c;
+            padding: 15px;
+            background: #fadbd8;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .success {
+            color: #27ae60;
+            padding: 10px;
+            background: #d5f5e3;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #loading {
+            display: none;
+            color: #e67e22;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .form-group.highlight {
+            background-color: #eaf2f8;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+    </style>
+    <script>
+        function getDbPath() {
+            var inputPath = document.getElementById("txtDbPath").value;
+            return inputPath ? inputPath : "C:\\Pescara\\IA\\GESTION.mdb";
+        }
+
+        function openConnection() {
+            try {
+                var connString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + getDbPath() + ";";
+                var conn = new ActiveXObject("ADODB.Connection");
+                conn.Open(connString);
+                return conn;
+            } catch (e) {
+                showError("Error al conectar con la base de datos: " + (e.message || e.description) + "<br>Ruta intentada: " + getDbPath());
+                return null;
+            }
+        }
+
+        function buildWhereClause() {
+            var where = [];
+            
+            var cliente = document.getElementById("txtCliente").value.replace(/'/g, "''");
+            if (cliente !== "") {
+                // Buscamos tanto en el número de cliente como en el código alfanumérico
+                if (!isNaN(cliente)) {
+                    where.push("(cliente = " + cliente + " OR codcli LIKE '%" + cliente + "%')");
+                } else {
+                    where.push("(codcli LIKE '%" + cliente + "%')");
+                }
+            }
+
+            var perno = document.getElementById("txtPerno").value.replace(/'/g, "");
+            if (perno !== "") {
+                if (!isNaN(perno)) {
+                    where.push("perno = " + perno);
+                }
+            }
+
+            var lista = document.getElementById("txtLista").value.replace(/'/g, "''");
+            if (lista !== "") {
+                where.push("lista LIKE '%" + lista + "%'");
+            }
+
+            var fechaDesde = document.getElementById("txtFechaDesde").value;
+            if (fechaDesde !== "") {
+                // Formato de fecha Access: #YYYY-MM-DD# o #MM/DD/YYYY#
+                where.push("Fecha >= #" + fechaDesde + "#");
+            }
+
+            var fechaHasta = document.getElementById("txtFechaHasta").value;
+            if (fechaHasta !== "") {
+                where.push("Fecha <= #" + fechaHasta + " 23:59:59#");
+            }
+
+            if (where.length > 0) {
+                return " WHERE " + where.join(" AND ");
+            }
+            return "";
+        }
+
+        function executeQuery(sql, reportName) {
+            document.getElementById("mensajes").innerHTML = "";
+            document.getElementById("loading").style.display = "block";
+            document.getElementById("table-container").innerHTML = "";
+
+            setTimeout(function() {
+                var conn = openConnection();
+                if (!conn) {
+                    document.getElementById("loading").style.display = "none";
+                    return;
+                }
+
+                try {
+                    var rs = new ActiveXObject("ADODB.Recordset");
+                    // rs.Open(commandText, connection, cursorType, lockType, options)
+                    rs.Open(sql, conn, 0, 1, 1);
+
+                    if (rs.EOF) {
+                        document.getElementById("mensajes").innerHTML = "<div class='success'>La consulta (" + reportName + ") no devolvió resultados para estos filtros.</div>";
+                    } else {
+                        var html = "<table><thead><tr>";
+                        
+                        // Generar cabeceras
+                        for (var i = 0; i < rs.Fields.Count; i++) {
+                            html += "<th>" + rs.Fields(i).Name + "</th>";
+                        }
+                        html += "</tr></thead><tbody>";
+
+                        // Generar filas
+                        var count = 0;
+                        while (!rs.EOF && count < 5000) { // Limitamos a 5000 para no colgar la HTA
+                            html += "<tr>";
+                            for (var i = 0; i < rs.Fields.Count; i++) {
+                                var fieldName = rs.Fields(i).Name;
+                                var val = rs.Fields(i).Value;
+                                
+                                if (val === null || val === undefined) val = "";
+                                
+                                // Formatear fechas si aplica
+                                if (val !== "" && (typeof val === 'date' || Object.prototype.toString.call(val) === '[object Date]')) {
+                                    val = new Date(val).toLocaleDateString();
+                                }
+                                
+                                // Formatear campos que contienen precios
+                                if (val !== "" && !isNaN(val) && (fieldName === "PrecioEst" || fieldName === "Total $" || fieldName === "Precio Unitario" || fieldName === "MontoTotal")) {
+                                    val = "$ " + parseFloat(val).toFixed(2);
+                                }
+
+                                html += "<td>" + val + "</td>";
+                            }
+                            html += "</tr>";
+                            rs.MoveNext();
+                            count++;
+                        }
+                        html += "</tbody></table>";
+                        
+                        var msjAdicional = count >= 5000 ? " (Limitado a los primeros 5000 registros)" : "";
+                        document.getElementById("mensajes").innerHTML = "<div class='success'>Reporte cargado: " + count + " filas" + msjAdicional + "</div>";
+                        document.getElementById("table-container").innerHTML = html;
+                    }
+                    rs.Close();
+                } catch (e) {
+                    showError("Error ejecutando la consulta: " + (e.message || e.description));
+                } finally {
+                    conn.Close();
+                    document.getElementById("loading").style.display = "none";
+                }
+            }, 50); // Pequeño timeout para permitir que el UI se actualice con el "loading"
+        }
+
+        function btnBuscarDetalle() {
+            var filtro = buildWhereClause();
+            // Agregamos el calculo de (Cantidad * precioestimado) para el Total $
+            var sql = "SELECT TOP 1000 Fecha, cliente AS CodCliente, codcli AS RefCliente, perno AS Perno, lista AS Lista, Cantidad, Pedido, Lote, precioestimado AS PrecioEst, (Cantidad * precioestimado) AS [Total $] FROM entregasalcliente" + filtro + " ORDER BY Fecha DESC";
+            executeQuery(sql, "Detalle de Entregas (Top 1000)");
+        }
+
+        function btnResumirPorPerno() {
+            var filtro = buildWhereClause();
+            var sql = "SELECT perno AS Perno, SUM(Cantidad) AS CantidadTotal, SUM(Cantidad * precioestimado) as MontoTotal FROM entregasalcliente" + filtro + " GROUP BY perno ORDER BY SUM(Cantidad) DESC";
+            executeQuery(sql, "Resumen Global por Perno");
+        }
+
+        function btnResumirPorClienteYPerno() {
+            var filtro = buildWhereClause();
+            var sql = "SELECT cliente AS CodCliente, codcli AS RefCliente, perno AS Perno, SUM(Cantidad) AS CantidadTotal, SUM(Cantidad * precioestimado) as MontoTotal FROM entregasalcliente" + filtro + " GROUP BY cliente, codcli, perno ORDER BY cliente, SUM(Cantidad) DESC";
+            executeQuery(sql, "Resumen por Cliente y Perno");
+        }
+
+        function showError(msg) {
+            document.getElementById("mensajes").innerHTML = "<div class='error'>" + msg + "</div>";
+            document.getElementById("loading").style.display = "none";
+        }
+        
+        // Ajustar ventana al iniciar
+        window.onload = function() {
+            window.resizeTo(1000, 700);
+            window.moveTo((screen.width - 1000)/2, (screen.height - 700)/2);
+        }
+    </script>
+</head>
+<body>
+    <h2>Consulta de Entregas de Clientes</h2>
+    
+    <div class="container">
+        <div class="panel-filtros">
+            <div class="form-group highlight">
+                <label for="txtDbPath">Ruta Base de Datos (Access):</label>
+                <input type="text" id="txtDbPath" value="C:\Pescara\IA\GESTION.mdb" placeholder="Ruta completa al archivo mdb o accdb">
+            </div>
+            
+            <div class="form-group">
+                <label for="txtCliente">Cliente (Código / Alfanumérico):</label>
+                <input type="text" id="txtCliente" placeholder="Ej: 150 o DC760">
+            </div>
+            
+            <div class="form-group">
+                <label for="txtPerno">Perno:</label>
+                <input type="text" id="txtPerno" placeholder="Ej: 1">
+            </div>
+            
+            <div class="form-group">
+                <label for="txtLista">Lista:</label>
+                <input type="text" id="txtLista" placeholder="Ej: A">
+            </div>
+            
+            <div class="form-group">
+                <label for="txtFechaDesde">Fecha Desde:</label>
+                <input type="date" id="txtFechaDesde">
+            </div>
+            
+            <div class="form-group">
+                <label for="txtFechaHasta">Fecha Hasta:</label>
+                <input type="date" id="txtFechaHasta">
+            </div>
+            
+            <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+            
+            <button class="btn-primary" onclick="btnBuscarDetalle()">Ver Entregas (Detalle)</button>
+            <button class="btn-secondary" onclick="btnResumirPorPerno()">Resumir por Perno</button>
+            <button class="btn-tertiary" onclick="btnResumirPorClienteYPerno()">Resumir por Cliente y Perno</button>
+        </div>
+        
+        <div class="panel-resultados">
+            <div id="loading">Consultando la base de datos, por favor espere...</div>
+            <div id="mensajes">
+                <div style="color: #7f8c8d; text-align: center; margin-top: 50px;">
+                    <h3>Ingrese los filtros y seleccione una acción</h3>
+                    <p>La base de datos se consultará localmente y se mostrarán los datos aquí.</p>
+                </div>
+            </div>
+            <div id="table-container"></div>
+        </div>
+    </div>
+</body>
+</html>
